@@ -264,7 +264,29 @@
 (use-package yasnippet-snippets
   :ensure t)
 
+(use-package lsp-mode
+  :ensure t
+  :init
+  (setq lsp-keymap-prefix "C-c l")
+  :hook ((js-mode . lsp)
+         (java-mode . lsp)
+         (typescript-mode . lsp)
+         (go-mode . lsp)
+         (web-mode . lsp)
+         (lsp-mode . lsp-enable-which-key-integration))
+  :config
+  (setq lsp-enable-indentation nil))
 
-;; --- custom-set-variables -- DELETE! DO NOT EDIT ---------------------
+(use-package lsp-ui
+  :ensure t
+  :defer t)
+
+(use-package lsp-java
+  :ensure t)
+
+;;;;;;;;;;;; todo: APHELEIA ;;;;;;;;;;;;;;;
+
+
+;; --- custom-set-variables ---------------------------------
 
 ;; Anything below this line should be deleted.
