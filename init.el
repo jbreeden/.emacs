@@ -184,6 +184,10 @@
   :config
   (move-text-default-bindings))
 
+(use-package string-inflection
+  :defer 2
+  :ensure t)
+
 (use-package define-word
   :ensure t
   :commands (define-word define-word-at-point))
@@ -220,7 +224,6 @@
   :ensure t
   :mode "\\.ya\\?ml\\'")
 
-;; todo - install goimports & gopls if missing & able
 (use-package go-mode
   :ensure t
   :mode ".go"
@@ -239,33 +242,21 @@
   (setq-default web-mode-css-indent-offset 2)
   (setq-default web-mode-sql-indent-offset 2))
 
+(use-package eslint-fix
+  :ensure t
+  :commands (eslint-fix))
+
 (use-package markdown-mode
-  :mode ".md"
-  :ensure t)
+  :ensure t
+  :mode ".md")
 
 (use-package terraform-mode
-  :mode ".tf"
-  :ensure t)
-
-(use-package lsp-mode
   :ensure t
-  :init
-  (setq lsp-keymap-prefix "C-c l")
-  :hook ((js-mode . lsp)
-         (java-mode . lsp)
-         (typescript-mode . lsp)
-         (go-mode . lsp)
-         (web-mode . lsp)
-         (lsp-mode . lsp-enable-which-key-integration))
-  :config
-  (setq lsp-enable-indentation nil))
+  :mode ".tf")
 
-(use-package lsp-ui
+(use-package pipenv
   :ensure t
-  :defer t)
-
-(use-package lsp-java
-  :ensure t)
+  :defer 1)
 
 (use-package yasnippet
   :ensure t)
@@ -273,6 +264,7 @@
 (use-package yasnippet-snippets
   :ensure t)
 
-;; --- custom-set-variables -----------------------------------------
 
-;; custom-set-variables will add things here at the bottom. I usually delete them.
+;; --- custom-set-variables -- DELETE! DO NOT EDIT ---------------------
+
+;; Anything below this line should be deleted.
