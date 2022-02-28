@@ -1,5 +1,12 @@
 ;; This file should stand alone.
 
+;; todo
+;; - emmet
+;; - org babel setup
+;; - major-mode which-key
+;; - apheleia
+;; - hungry delete tweak
+
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
@@ -33,6 +40,11 @@
 (setq-default make-backup-files nil) ; no littering
 (setq-default require-final-newline t)
 
+(progn ; Keep "custom" variables separate from this init file
+  (setq-default custom-file "~/.emacs.d/custom.el")
+  (when (file-exists-p custom-file)
+    (load custom-file)))
+
 ;; Performance stuff, especially things suggested by
 ;; https://emacs-lsp.github.io/lsp-mode/page/performance/
 (setq gc-cons-threshold (* 100 (expt 2 20))) ; 100MB
@@ -58,7 +70,7 @@
 (bind-key* "M-o" 'other-window)
 (bind-key* "C-c ." 'bury-buffer)
 (bind-key* "C-c ," 'unbury-buffer)
-(bind-key "C-c b" 'switch-to-buffer)
+(bind-key* "C-c b" 'switch-to-buffer)
 (bind-key "C-c C-g" 'reload-major-mode)
 
 ;; --- Commands -----------------------------------------------------
@@ -135,7 +147,11 @@
   (require 'spaceline-config)
   (spaceline-spacemacs-theme))
 
-(use-package buffer-move
+(use-package windmove ; Shift+Arrow moves point to adjacent windows
+  :config
+  (windmove-default-keybindings))
+
+(use-package buffer-move ; Ctrl+Shift+Arrow moves buffer to adjacent windows
   :ensure t
   :bind (("<C-S-left>" . 'buf-move-left)
          ("<C-S-right>" . 'buf-move-right)
@@ -144,6 +160,8 @@
 
 (use-package which-key
   :ensure t
+  :init
+  (setq-default which-key-idle-delay 0.3)
   :config
   (which-key-mode))
 
@@ -199,22 +217,37 @@
   (global-company-mode)
   (setq-default company-async-timeout 6))
 
+(use-package all-the-icons
+  :if (display-graphic-p))
+
+(use-package all-the-icons-completion
+  :ensure t
+  :if (display-graphic-p)
+  :config (all-the-icons-completion-mode))
+
 (use-package magit
   :defer 2
   :ensure t
   :bind (("C-c g s" . magit-status)
-         ("C-c g f" . magit-find-file)
+         ("C-c g f" . my-magit-find-file-in-worktree)
          ("C-c g g" . magit-file-dispatch))
   :config
   (progn
     (setq-default magit-display-buffer-function
                   'magit-display-buffer-same-window-except-diff-v1)
+
     (defun git ()
       (interactive)
-      (call-interactively 'magit-git-command-topdir))))
+      (call-interactively 'magit-git-command-topdir))
+
+    (defun my-magit-find-file-in-worktree (file)
+      (interactive (list
+                    (magit-read-file-from-rev "HEAD" "Find file")))
+      (find-file file))))
 
 (use-package treemacs
-  :ensure t)
+  :ensure t
+  :bind (("C-c t" . treemacs)))
 
 (use-package projectile
   :ensure t
@@ -258,11 +291,21 @@
   :ensure t
   :defer 1)
 
+(use-package editorconfig
+  :ensure t
+  :config
+  (editorconfig-mode 1))
+
 (use-package yasnippet
   :ensure t)
 
 (use-package yasnippet-snippets
   :ensure t)
+
+(use-package flycheck
+  :ensure t
+  :hook ((prog-mode . flycheck-mode))
+  :bind-keymap (("C-c f" . flycheck-command-map)))
 
 (use-package lsp-mode
   :ensure t
@@ -282,11 +325,8 @@
   :defer t)
 
 (use-package lsp-java
-  :ensure t)
-
-;;;;;;;;;;;; todo: APHELEIA ;;;;;;;;;;;;;;;
-
-
-;; --- custom-set-variables ---------------------------------
-
-;; Anything below this line should be deleted.
+  :ensure t
+  :init
+  (progn
+    (setq lsp-java-format-settings-url "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml")
+    (setq lsp-java-format-settings-profile "GoogleStyle")))
