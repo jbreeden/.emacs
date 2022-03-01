@@ -251,7 +251,8 @@
 
 (use-package projectile
   :ensure t
-  :bind-keymap ("C-c p" . projectile-command-map))
+  :bind-keymap ("C-c p" . projectile-command-map)
+  :init (setq-default projectile-switch-project-action 'projectile-dired))
 
 (use-package yaml-mode
   :ensure t
