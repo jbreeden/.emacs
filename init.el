@@ -126,6 +126,8 @@
 
 (use-package exec-path-from-shell
   :ensure t
+  :init
+  (setq-default exec-path-from-shell-shell-name "zsh")
   :config (exec-path-from-shell-initialize))
 
 (use-package spacemacs-theme
@@ -139,7 +141,11 @@
 (use-package atom-one-dark-theme
   :defer t
   :ensure t)
+
 (load-theme 'atom-one-dark 'noconfirm)
+(if window-system
+    (set-face-attribute 'default nil :height 140)
+  (set-face-background 'default "black"))
 
 (use-package spaceline
   :ensure t
@@ -195,7 +201,8 @@
   :ensure t
   :config
   (setq-default hungry-delete-join-reluctantly t)
-  (global-hungry-delete-mode))
+  ;; (global-hungry-delete-mode)
+  )
 
 (use-package move-text
   :ensure t
@@ -212,18 +219,10 @@
 
 (use-package company
   :ensure t
-  :bind (("C-c TAB" . company-complete))
+  :bind* (("C-c TAB" . company-complete))
   :config
   (global-company-mode)
   (setq-default company-async-timeout 6))
-
-(use-package all-the-icons
-  :if (display-graphic-p))
-
-(use-package all-the-icons-completion
-  :ensure t
-  :if (display-graphic-p)
-  :config (all-the-icons-completion-mode))
 
 (use-package magit
   :defer 2
@@ -243,7 +242,7 @@
     (defun my-magit-find-file-in-worktree (file)
       (interactive (list
                     (magit-read-file-from-rev "HEAD" "Find file")))
-      (find-file file))))
+      (find-file (concat (magit-toplevel) file)))))
 
 (use-package treemacs
   :ensure t
@@ -252,7 +251,8 @@
 (use-package projectile
   :ensure t
   :bind-keymap ("C-c p" . projectile-command-map)
-  :init (setq-default projectile-switch-project-action 'projectile-dired))
+  :init (setq-default projectile-switch-project-action 'projectile-dired)
+  :config (projectile-mode))
 
 (use-package yaml-mode
   :ensure t
@@ -262,6 +262,35 @@
   :ensure t
   :mode ".go"
   :hook (go-mode . (lambda() (interactive) (setq-local tab-width 4))))
+
+(use-package go-mode
+  :ensure
+  :init
+  (progn
+    (setq gofmt-command "goimports")
+    (add-hook 'before-save-hook 'gofmt-before-save)
+
+    (defun goimports ()
+      (interactive)
+      (let ((gofmt-command "goimports"))
+        (gofmt)))))
+
+(use-package flycheck-golangci-lint
+  :ensure
+  :after flycheck
+  :init
+  (defun -flycheck-select-go-checker ()
+    (cond
+     ((flycheck-may-use-checker 'golangci-lint)
+      (flycheck-select-checker 'golangci-lint))))
+  :config
+  (progn
+    (flycheck-add-next-checker 'golangci-lint 'go-build 'append)
+    (flycheck-add-next-checker 'golangci-lint 'go-gofmt 'append)
+    (add-hook 'flycheck-mode-hook #'flycheck-golangci-lint-setup)
+    ;; LSP tries to be the default checker in its go-mode hook,
+    ;; but it sucks so run my checker selector after lsp is setup
+    (add-hook 'go-mode-hook '-flycheck-select-go-checker 100)))
 
 (use-package web-mode
   :ensure t
@@ -274,7 +303,8 @@
   (setq-default web-mode-code-indent-offset 2)
   (setq-default web-mode-markup-indent-offset 2)
   (setq-default web-mode-css-indent-offset 2)
-  (setq-default web-mode-sql-indent-offset 2))
+  (setq-default web-mode-sql-indent-offset 2)
+  (setq-default web-mode-enable-auto-quoting nil))
 
 (use-package eslint-fix
   :ensure t
@@ -297,11 +327,11 @@
   :config
   (editorconfig-mode 1))
 
-(use-package yasnippet
-  :ensure t)
+;; (use-package yasnippet
+;;   :ensure t)
 
-(use-package yasnippet-snippets
-  :ensure t)
+;; (use-package yasnippet-snippets
+;;   :ensure t)
 
 (use-package flycheck
   :ensure t
@@ -317,6 +347,7 @@
          (typescript-mode . lsp)
          (go-mode . lsp)
          (web-mode . lsp)
+         (terraform-mode . lsp)
          (lsp-mode . lsp-enable-which-key-integration))
   :config
   (setq lsp-enable-indentation nil))
