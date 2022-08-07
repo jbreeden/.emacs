@@ -38,6 +38,7 @@
 (setq-default indent-tabs-mode nil)
 (setq-default auto-save-default nil) ; no littering
 (setq-default make-backup-files nil) ; no littering
+(setq-default create-lockfiles nil) ; no littering
 (setq-default require-final-newline t)
 
 (progn ; Keep "custom" variables separate from this init file
@@ -124,6 +125,14 @@
 
 ;; -- External --
 
+(use-package undo-tree
+  :ensure t
+  :config
+  (progn
+    (global-undo-tree-mode)
+    (setq undo-tree-auto-save-history t)
+    (setq undo-tree-history-directory-alist `(("." . ,(expand-file-name "~/.emacs.d/undo"))))))
+
 (use-package exec-path-from-shell
   :ensure t
   :init
@@ -147,18 +156,14 @@
     (set-face-attribute 'default nil :height 140)
   (set-face-background 'default "black"))
 
-(use-package spaceline
-  :ensure t
-  :config
-  (require 'spaceline-config)
-  (spaceline-spacemacs-theme))
-
 (use-package windmove ; Shift+Arrow moves point to adjacent windows
   :config
   (windmove-default-keybindings))
 
 (use-package buffer-move ; Ctrl+Shift+Arrow moves buffer to adjacent windows
   :ensure t
+  :config
+  (setq buffer-move-behavior 'move)
   :bind (("<C-S-left>" . 'buf-move-left)
          ("<C-S-right>" . 'buf-move-right)
          ("<C-S-up>" . 'buf-move-up)
@@ -170,6 +175,8 @@
   (setq-default which-key-idle-delay 0.3)
   :config
   (which-key-mode))
+
+;; -----------------------------------------------------------------------------
 
 (use-package selectrum
   :ensure t
@@ -327,11 +334,11 @@
   :config
   (editorconfig-mode 1))
 
-;; (use-package yasnippet
-;;   :ensure t)
+(use-package yasnippet
+  :ensure t)
 
-;; (use-package yasnippet-snippets
-;;   :ensure t)
+(use-package yasnippet-snippets
+  :ensure t)
 
 (use-package flycheck
   :ensure t
@@ -348,6 +355,7 @@
          (go-mode . lsp)
          (web-mode . lsp)
          (terraform-mode . lsp)
+         (sh-mode . lsp)
          (lsp-mode . lsp-enable-which-key-integration))
   :config
   (setq lsp-enable-indentation nil))
@@ -362,3 +370,5 @@
   (progn
     (setq lsp-java-format-settings-url "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml")
     (setq lsp-java-format-settings-profile "GoogleStyle")))
+
+(put 'downcase-region 'disabled nil)
