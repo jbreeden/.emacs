@@ -4,8 +4,6 @@
 ;; - emmet
 ;; - org babel setup
 ;; - major-mode which-key
-;; - apheleia
-;; - hungry delete tweak
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
@@ -40,6 +38,8 @@
 (setq-default make-backup-files nil) ; no littering
 (setq-default create-lockfiles nil) ; no littering
 (setq-default require-final-newline t)
+(setq-default eldoc-echo-area-prefer-doc-buffer t)
+(setq-default use-short-answers t)
 
 (progn ; Keep "custom" variables separate from this init file
   (setq-default custom-file "~/.emacs.d/custom.el")
@@ -72,7 +72,9 @@
 (bind-key* "C-c ." 'bury-buffer)
 (bind-key* "C-c ," 'unbury-buffer)
 (bind-key* "C-c b" 'switch-to-buffer)
-(bind-key "C-c C-g" 'reload-major-mode)
+(bind-key* "C-c C-g" 'reload-major-mode)
+(bind-key* "M-N" 'flymake-goto-next-error)
+(bind-key* "M-P" 'flymake-goto-prev-error)
 
 ;; --- Commands -----------------------------------------------------
 
@@ -123,15 +125,22 @@
   :init
   (setq-default js-jsx-syntax t))
 
-;; -- External --
-
-(use-package undo-tree
-  :ensure t
+(use-package project
   :config
-  (progn
-    (global-undo-tree-mode)
-    (setq undo-tree-auto-save-history t)
-    (setq undo-tree-history-directory-alist `(("." . ,(expand-file-name "~/.emacs.d/undo"))))))
+  (defvar project-root-files '("go.mod" "package.json"))
+  (defun project-try-go-mod (dir)
+    (when-let ((root
+                (cond
+                 ((file-exists-p "go.mod") default-directory)
+                 (t (locate-dominating-file default-directory "go.mod")))))
+      (cons 'transient (file-truename root))))
+
+  (add-to-list 'project-find-functions 'project-try-go-mod))
+
+;; (use-package image-mode
+;;   :hook (image-mode-hook . (lambda () (setauto-revert-mode))
+
+;; -- External --
 
 (use-package exec-path-from-shell
   :ensure t
@@ -176,8 +185,6 @@
   :config
   (which-key-mode))
 
-;; -----------------------------------------------------------------------------
-
 (use-package selectrum
   :ensure t
   :config
@@ -194,11 +201,17 @@
   (selectrum-prescient-mode +1))
 
 (use-package ripgrep
-  :ensure t)
+  :ensure t
+  :bind* (("C-c /" . rg))
+  :config
+  (defun rg (regex)
+    (interactive
+     (list (read-from-minibuffer "Ripgrep search for: " (thing-at-point 'symbol))))
+    (ripgrep-regexp regex default-directory)))
 
 (use-package deadgrep
   :ensure t
-  :bind ("C-c /" . 'deadgrep))
+  :bind* (("C-c g /" . deadgrep)))
 
 (use-package ws-butler
   :ensure t
@@ -251,79 +264,54 @@
                     (magit-read-file-from-rev "HEAD" "Find file")))
       (find-file (concat (magit-toplevel) file)))))
 
-(use-package treemacs
-  :ensure t
-  :bind (("C-c t" . treemacs)))
-
-(use-package projectile
-  :ensure t
-  :bind-keymap ("C-c p" . projectile-command-map)
-  :init (setq-default projectile-switch-project-action 'projectile-dired)
-  :config (projectile-mode))
-
 (use-package yaml-mode
-  :ensure t
-  :mode "\\.ya\\?ml\\'")
+  :ensure t)
 
 (use-package go-mode
   :ensure t
-  :mode ".go"
-  :hook (go-mode . (lambda() (interactive) (setq-local tab-width 4))))
-
-(use-package go-mode
-  :ensure
   :init
-  (progn
-    (setq gofmt-command "goimports")
-    (add-hook 'before-save-hook 'gofmt-before-save)
 
-    (defun goimports ()
-      (interactive)
-      (let ((gofmt-command "goimports"))
-        (gofmt)))))
+  (setq gofmt-command "goimports")
+  (add-hook 'before-save-hook 'gofmt-before-save) ; todo: Not for every mode?
 
-(use-package flycheck-golangci-lint
-  :ensure
-  :after flycheck
-  :init
-  (defun -flycheck-select-go-checker ()
-    (cond
-     ((flycheck-may-use-checker 'golangci-lint)
-      (flycheck-select-checker 'golangci-lint))))
-  :config
-  (progn
-    (flycheck-add-next-checker 'golangci-lint 'go-build 'append)
-    (flycheck-add-next-checker 'golangci-lint 'go-gofmt 'append)
-    (add-hook 'flycheck-mode-hook #'flycheck-golangci-lint-setup)
-    ;; LSP tries to be the default checker in its go-mode hook,
-    ;; but it sucks so run my checker selector after lsp is setup
-    (add-hook 'go-mode-hook '-flycheck-select-go-checker 100)))
+  (defun goimports ()
+    (interactive)
+    (let ((gofmt-command "goimports"))
+      (gofmt)))
+
+  :hook (go-mode . (lambda()
+                     (interactive)
+                     (setq-local tab-width 4)
+                     (eglot-ensure))))
 
 (use-package web-mode
   :ensure t
-  :mode ("\\.\\([jt]sx?\\|html\\?\\|css\\|mustache\\)\\'" . web-mode)
+  :mode ("\\.\\(html\\?\\|css\\|mustache\\)\\'" . web-mode)
   :hook ((web-mode . (lambda()
                        (when (or (equal web-mode-content-type "javascript")
                                  (equal web-mode-content-type "typescript"))
                          (setq web-mode-content-type "jsx")))))
-  :config
+  :init
   (setq-default web-mode-code-indent-offset 2)
   (setq-default web-mode-markup-indent-offset 2)
   (setq-default web-mode-css-indent-offset 2)
   (setq-default web-mode-sql-indent-offset 2)
   (setq-default web-mode-enable-auto-quoting nil))
 
+(use-package apheleia
+  :ensure t
+  :config
+  (apheleia-global-mode +1))
+
 (use-package eslint-fix
   :ensure t
   :commands (eslint-fix))
 
 (use-package markdown-mode
-  :ensure t
-  :mode ".md")
+  :ensure t)
 
 (use-package terraform-mode
-  :ensure t
-  :mode ".tf")
+  :ensure t)
 
 (use-package pipenv
   :ensure t
@@ -340,35 +328,38 @@
 (use-package yasnippet-snippets
   :ensure t)
 
-(use-package flycheck
+(use-package eglot
   :ensure t
-  :hook ((prog-mode . flycheck-mode))
-  :bind-keymap (("C-c f" . flycheck-command-map)))
-
-(use-package lsp-mode
-  :ensure t
-  :init
-  (setq lsp-keymap-prefix "C-c l")
-  :hook ((js-mode . lsp)
-         (java-mode . lsp)
-         (typescript-mode . lsp)
-         (go-mode . lsp)
-         (web-mode . lsp)
-         (terraform-mode . lsp)
-         (sh-mode . lsp)
-         (lsp-mode . lsp-enable-which-key-integration))
   :config
-  (setq lsp-enable-indentation nil))
+  (setq eglot-confirm-server-initiated-edits nil)
+  (add-to-list 'eglot-server-programs '(terraform-mode "terraform-lsp"))
 
-(use-package lsp-ui
-  :ensure t
-  :defer t)
+  ;; Define a derived mode for all JS/JSX/TS/JSX so we can set a specific server for eglot.
+  (require 'web-mode)
+  (define-derived-mode typescriptreact-mode web-mode
+    "TypeScript TSX")
+  (add-to-list 'auto-mode-alist '("\\.[jt]sx?\\'" . typescriptreact-mode))
+  (add-to-list 'eglot-server-programs '(typescriptreact-mode . ("typescript-language-server" "--stdio"))))
 
-(use-package lsp-java
+(use-package eglot-java
   :ensure t
-  :init
-  (progn
-    (setq lsp-java-format-settings-url "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml")
-    (setq lsp-java-format-settings-profile "GoogleStyle")))
+  :hook (java-mode . eglot-java-init))
+
+(use-package tree-sitter
+  :ensure t
+  :config
+  ;; activate tree-sitter on any buffer containing code for which it has a parser available
+  (global-tree-sitter-mode)
+  ;; you can easily see the difference tree-sitter-hl-mode makes for python, ts or tsx
+  ;; by switching on and off
+  (add-hook 'tree-sitter-after-on-hook #'tree-sitter-hl-mode))
+
+(use-package tree-sitter-langs
+  :ensure t
+  :after tree-sitter)
+
+(use-package mermaid-mode
+  :ensure t
+  :mode ("\\.mmd\\'" . mermaid-mode))
 
 (put 'downcase-region 'disabled nil)
