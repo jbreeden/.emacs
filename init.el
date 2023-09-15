@@ -1,9 +1,10 @@
 ;; This file should stand alone.
 
-;; todo
-;; - emmet
-;; - org babel setup
-;; - major-mode which-key
+;; To get emacs itself, with all the good stuff, on MacOS:
+;;
+;; brew install emacs-plus@30 --with-native-comp
+
+(setq native-comp-always-compile t)
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
@@ -11,9 +12,8 @@
 
 (unless (load "use-package" 'noerr)
   (package-refresh-contents)
-  (package-install 'use-package))
-
-(load "use-package" 'noerr)
+  (package-install 'use-package)
+  (load "use-package" 'noerr))
 
 ;; --- Emacs options --------------------------------------------------------
 
@@ -65,6 +65,8 @@
 (show-paren-mode 1)
 (xterm-mouse-mode 1)
 (global-display-line-numbers-mode 1)
+(when (functionp 'pixel-scroll-precision-mode)
+  (pixel-scroll-precision-mode))
 
 ;; --- Key bindings -------------------------------------------------
 
@@ -73,8 +75,15 @@
 (bind-key* "C-c ," 'unbury-buffer)
 (bind-key* "C-c b" 'switch-to-buffer)
 (bind-key* "C-c C-g" 'reload-major-mode)
+
+; M-{n,p} find the "next error" (works with ripgrep/deadgrep results
+(bind-key "M-n" 'next-error)
+(bind-key "M-p" 'previous-error)
+; M-{N,P} go to the next flymake error (works for LSP errors)
 (bind-key* "M-N" 'flymake-goto-next-error)
 (bind-key* "M-P" 'flymake-goto-prev-error)
+;; Since these often do not conflict, using a combination of both can be
+;; a powerful tool for adhoc refactoring tasks.
 
 ;; --- Commands -----------------------------------------------------
 
@@ -121,10 +130,6 @@
   :config
   (recentf-mode))
 
-(use-package js
-  :init
-  (setq-default js-jsx-syntax t))
-
 (use-package project
   :config
   (defvar project-root-files '("go.mod" "package.json"))
@@ -137,10 +142,32 @@
 
   (add-to-list 'project-find-functions 'project-try-go-mod))
 
-;; (use-package image-mode
-;;   :hook (image-mode-hook . (lambda () (setauto-revert-mode))
+(use-package ansi-color
+    :hook (compilation-filter . ansi-color-compilation-filter))
 
-;; -- External --
+
+(use-package treesit
+  :config
+  (setq-default treesit-font-lock-level 4))
+
+
+;; Automatically handle the treesit configuration, and enabling treesit modes.
+;; See here for manual setup instructions:
+;;   https://www.masteringemacs.org/article/how-to-get-started-tree-sitter#:~:text=The%20command%20M%2Dx%20treesit%2Dinstall,to%20find%20the%20language%20grammars.
+(use-package treesit-auto
+  :ensure
+  :config
+  (global-treesit-auto-mode))
+
+;; (mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist))
+
+;; -- External ------------------------------------------------
+
+(use-package fasd
+  :ensure t
+  :bind* (("C-c f" . fasd-find-file))
+  :config
+  (global-fasd-mode 1))
 
 (use-package exec-path-from-shell
   :ensure t
@@ -200,18 +227,21 @@
   :config
   (selectrum-prescient-mode +1))
 
-(use-package ripgrep
-  :ensure t
-  :bind* (("C-c /" . rg))
-  :config
-  (defun rg (regex)
-    (interactive
-     (list (read-from-minibuffer "Ripgrep search for: " (thing-at-point 'symbol))))
-    (ripgrep-regexp regex default-directory)))
-
 (use-package deadgrep
   :ensure t
-  :bind* (("C-c g /" . deadgrep)))
+  :config
+
+  (defun my/deadrep-display-buffer (buffer)
+    (display-buffer-use-least-recent-window buffer '()))
+
+  (setq deadgrep-display-buffer-function 'my/deadrep-display-buffer)
+
+  (defun my/deadgrep-default-directory (search-term)
+    (interactive (list (deadgrep--read-search-term)))
+    (deadgrep search-term default-directory))
+
+  :bind* (("C-c / ." . my/deadgrep-default-directory)
+          ("C-c / /" . deadgrep)))
 
 (use-package ws-butler
   :ensure t
@@ -220,9 +250,7 @@
 (use-package hungry-delete
   :ensure t
   :config
-  (setq-default hungry-delete-join-reluctantly t)
-  ;; (global-hungry-delete-mode)
-  )
+  (setq-default hungry-delete-join-reluctantly t))
 
 (use-package move-text
   :ensure t
@@ -231,7 +259,12 @@
 
 (use-package string-inflection
   :defer 2
-  :ensure t)
+  :ensure t
+  :bind (("C-c s _" . string-inflection-underscore)
+         ("C-c s -" . string-inflection-kebab-case)
+         ("C-c s C" . string-inflection-camelcase)
+         ("C-c s c" . string-inflection-lower-camelcase)
+         ("C-c s U" . string-inflection-upcase)))
 
 (use-package define-word
   :ensure t
@@ -261,7 +294,8 @@
 
     (defun my-magit-find-file-in-worktree (file)
       (interactive (list
-                    (magit-read-file-from-rev "HEAD" "Find file")))
+                    (let ((default-directory (magit-toplevel)))
+                      (magit-read-file "Find file"))))
       (find-file (concat (magit-toplevel) file)))))
 
 (use-package yaml-mode
@@ -281,27 +315,70 @@
 
   :hook (go-mode . (lambda()
                      (interactive)
-                     (setq-local tab-width 4)
-                     (eglot-ensure))))
+                     (setq-local tab-width 4))))
 
-(use-package web-mode
-  :ensure t
-  :mode ("\\.\\(html\\?\\|css\\|mustache\\)\\'" . web-mode)
-  :hook ((web-mode . (lambda()
-                       (when (or (equal web-mode-content-type "javascript")
-                                 (equal web-mode-content-type "typescript"))
-                         (setq web-mode-content-type "jsx")))))
-  :init
-  (setq-default web-mode-code-indent-offset 2)
-  (setq-default web-mode-markup-indent-offset 2)
-  (setq-default web-mode-css-indent-offset 2)
-  (setq-default web-mode-sql-indent-offset 2)
-  (setq-default web-mode-enable-auto-quoting nil))
+(use-package cc-mode
+  :config
+  (setq java-ts-mode-indent-offset 2))
 
+(use-package js
+  ;; :init
+  :mode ("\\.\\([jt]sx?\\)\\'" . tsx-ts-mode)
+  :bind* (("M-." . 'xref-find-definitions))
+  :config
+  (setq js-indent-level 2))
+
+;; Auto formatting for all the things
 (use-package apheleia
   :ensure t
   :config
-  (apheleia-global-mode +1))
+  (apheleia-global-mode +1)
+  (setq apheleia-mode-alist
+        '((php-mode . phpcs)
+          (json-mode . prettier-json)
+          (beancount-mode . bean-format)
+          (cc-mode . clang-format)
+          (c-mode . clang-format)
+          (c++-mode . clang-format)
+          (caml-mode . ocamlformat)
+          (common-lisp-mode . lisp-indent)
+          (css-mode . prettier-css)
+          (dart-mode . dart-format)
+          (elixir-mode . mix-format)
+          (elm-mode . elm-format)
+          (fish-mode . fish-indent)
+          (go-mode . gofmt)
+          (graphql-mode . prettier-graphql)
+          (haskell-mode . brittany)
+          (html-mode . prettier-html)
+          (java-mode . google-java-format)
+          (js3-mode . prettier-javascript)
+          ; Prefer vanilla prettier over *-javascript to infer syntax from filename
+          (js-mode . prettier)
+          (js-ts-mode . prettier)
+          (typescript-ts-mode . prettier)
+          (tsx-ts-mode . prettier)
+          (js-mode . prettier)
+          (kotlin-mode . ktlint)
+          (latex-mode . latexindent)
+          (LaTeX-mode . latexindent)
+          (lua-mode . stylua)
+          (lisp-mode . lisp-indent)
+          (nix-mode . nixfmt)
+          (python-mode . black)
+          (ruby-mode . prettier-ruby)
+          (rustic-mode . rustfmt)
+          (rust-mode . rustfmt)
+          (scss-mode . prettier-scss)
+          (sh-mode . shfmt)
+          (terraform-mode . terraform)
+          (TeX-latex-mode . latexindent)
+          (TeX-mode . latexindent)
+          (tuareg-mode . ocamlformat)
+          ; Prefer vanilla prettier over *-typescript to infer syntax from filename
+          (typescript-mode . prettier)
+          (web-mode . prettier)
+          (yaml-mode . prettier-yaml))))
 
 (use-package eslint-fix
   :ensure t
@@ -329,37 +406,61 @@
   :ensure t)
 
 (use-package eglot
-  :ensure t
+  ;; :ensure t
+  :hook ((go-mode js-mode python-mode) . eglot-ensure)
+  :bind* (("C-c a" . eglot-code-actions))
   :config
   (setq eglot-confirm-server-initiated-edits nil)
-  (add-to-list 'eglot-server-programs '(terraform-mode "terraform-lsp"))
+  (add-to-list 'eglot-server-programs '(terraform-mode "terraform-lsp")))
 
-  ;; Define a derived mode for all JS/JSX/TS/JSX so we can set a specific server for eglot.
-  (require 'web-mode)
-  (define-derived-mode typescriptreact-mode web-mode
-    "TypeScript TSX")
-  (add-to-list 'auto-mode-alist '("\\.[jt]sx?\\'" . typescriptreact-mode))
-  (add-to-list 'eglot-server-programs '(typescriptreact-mode . ("typescript-language-server" "--stdio"))))
 
 (use-package eglot-java
   :ensure t
   :hook (java-mode . eglot-java-init))
 
-(use-package tree-sitter
-  :ensure t
-  :config
-  ;; activate tree-sitter on any buffer containing code for which it has a parser available
-  (global-tree-sitter-mode)
-  ;; you can easily see the difference tree-sitter-hl-mode makes for python, ts or tsx
-  ;; by switching on and off
-  (add-hook 'tree-sitter-after-on-hook #'tree-sitter-hl-mode))
-
-(use-package tree-sitter-langs
-  :ensure t
-  :after tree-sitter)
-
 (use-package mermaid-mode
+  :defer
   :ensure t
   :mode ("\\.mmd\\'" . mermaid-mode))
+
+(use-package vterm
+  :defer
+  :ensure t
+  :config
+  (setq vterm-shell "bash"))
+
+(use-package expand-region
+  :defer
+  :ensure t
+  :bind (("C-=" . er/expand-region)
+         ("C--" . er/contract-region)))
+
+(use-package git-link
+  :defer 4
+  :ensure t)
+
+(use-package multi-vterm
+  :ensure t
+  :bind (("C-c t t" . multi-vterm)
+         ("C-c t d" . multi-vterm-dedicated-toggle)
+         ("C-c t /" . multi-vterm-project)
+         ("C-c t n" . multi-vterm-next)
+         ("C-c t p" . multi-vterm-next)))
+
+(use-package fzf
+  :ensure t)
+
+(defun my-vterm-toggle ()
+  (interactive)
+  (vterm-toggle)
+  (rename-buffer (concat "*" (file-name-base (project-root (project-current))) "*")))
+
+(defun dj (worktree)
+  (interactive (list (read-file-name "worktree: " "~/decodable/repos/decodable.d/")))
+  (magit-status worktree))
+
+(defun de-worktree (branch-name)
+  (interactive (list (read-string "branch name: ")))
+  (magit-status (string-trim (shell-command-to-string (format "de-worktree %s 2> /dev/null" (shell-quote-argument branch-name))))))
 
 (put 'downcase-region 'disabled nil)
